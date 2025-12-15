@@ -1,4 +1,3 @@
-
 import { SavedClient, ClientDetails } from '../types';
 
 const CLIENTS_KEY = 'orcaFacil_clients';
@@ -12,41 +11,6 @@ export interface PaginatedClientResponse {
 
 let clientCache: SavedClient[] | null = null;
 
-const generateMockClients = (): SavedClient[] => {
-  return [
-    { 
-        id: 'CLT1', 
-        name: 'Tech Solutions Ltda', 
-        personType: 'PJ', 
-        document: '12.345.678/0001-90', 
-        email: 'contato@techsolutions.com.br', 
-        phone: '(11) 98765-4321', 
-        address: 'Av. Paulista, 1000, SP',
-        createdAt: new Date().toISOString()
-    },
-    { 
-        id: 'CLT2', 
-        name: 'João da Silva', 
-        personType: 'PF', 
-        document: '123.456.789-00', 
-        email: 'joao.silva@email.com', 
-        phone: '(21) 99999-8888', 
-        address: 'Rua das Flores, 123, RJ',
-        createdAt: new Date().toISOString()
-    },
-    { 
-        id: 'CLT3', 
-        name: 'Mercado Preço Bom', 
-        personType: 'PJ', 
-        document: '98.765.432/0001-10', 
-        email: 'compras@precobom.com', 
-        phone: '(31) 3333-4444', 
-        address: 'Rua do Comércio, 500, MG',
-        createdAt: new Date().toISOString()
-    }
-  ];
-};
-
 const ensureClientCache = () => {
     if (clientCache) return clientCache;
     try {
@@ -54,8 +18,8 @@ const ensureClientCache = () => {
         if (raw) {
             clientCache = JSON.parse(raw);
         } else {
-            clientCache = generateMockClients();
-            localStorage.setItem(CLIENTS_KEY, JSON.stringify(clientCache));
+            // Start empty - NO MOCK DATA
+            clientCache = [];
         }
     } catch (e) {
         clientCache = [];
@@ -76,7 +40,6 @@ export const clientService = {
   },
 
   getPaginated: async (page: number, limit: number, query: string = ''): Promise<PaginatedClientResponse> => {
-    // Removed artificial delay
     const clients = ensureClientCache();
 
     // 1. Filter

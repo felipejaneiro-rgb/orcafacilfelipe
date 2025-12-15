@@ -1,10 +1,8 @@
-
 import React, { useEffect, useState, useCallback } from 'react';
 import { QuoteData, QuoteStatus } from '../types';
 import { storageService, PaginatedResponse } from '../services/storageService';
 import Button from './ui/Button';
 import Input from './ui/Input';
-import Card from './ui/Card';
 import { calculateQuoteTotals } from '../utils/calculations';
 import { 
     Search, 
@@ -18,8 +16,7 @@ import {
     ChevronLeft,
     ChevronRight,
     FileText,
-    Copy,
-    MoreHorizontal
+    Copy
 } from 'lucide-react';
 
 interface Props {

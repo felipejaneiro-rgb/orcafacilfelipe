@@ -1,4 +1,3 @@
-
 import { SavedService, SavedProduct } from '../types';
 
 const SERVICES_KEY = 'orcaFacil_services';
@@ -18,47 +17,13 @@ const getNextId = (items: { id: string }[], prefix: string): string => {
   return `${prefix}${maxId + 1}`;
 };
 
-const generateMockServices = (): SavedService[] => {
-  const rawData = [
-    { description: "Formatação de Computador", defaultPrice: 150.00 },
-    { description: "Remoção de Vírus e Malware", defaultPrice: 120.00 },
-    { description: "Instalação de Windows + Pacote Office", defaultPrice: 180.00 },
-    { description: "Limpeza Física Interna (Desktop)", defaultPrice: 100.00 },
-    { description: "Consultoria Técnica (Hora)", defaultPrice: 200.00 },
-  ];
-
-  return rawData.map((item, index) => ({
-    ...item,
-    id: `SVC${index + 1}`
-  }));
-};
-
-const generateMockProducts = (): SavedProduct[] => {
-  const rawData: Omit<SavedProduct, 'id'>[] = [
-    { description: "Cabo de Rede CAT5e", defaultPrice: 2.50, unit: 'm' },
-    { description: "Conector RJ45", defaultPrice: 1.00, unit: 'un' },
-    { description: "SSD 240GB Kingston", defaultPrice: 180.00, unit: 'un' },
-    { description: "Roteador Gigabit TP-Link", defaultPrice: 350.00, unit: 'un' },
-    { description: "Caixa de Parafusos", defaultPrice: 15.00, unit: 'cx' },
-  ];
-
-  return rawData.map((item, index) => ({
-    ...item,
-    id: `PDT${index + 1}`
-  }));
-};
-
 export const catalogService = {
   // --- SERVICES ---
   getServices: (): SavedService[] => {
     try {
       const raw = localStorage.getItem(SERVICES_KEY);
-      let services: SavedService[] = raw ? JSON.parse(raw) : [];
-      if (services.length === 0) {
-        services = generateMockServices();
-        localStorage.setItem(SERVICES_KEY, JSON.stringify(services));
-      }
-      return services.sort((a, b) => a.description.localeCompare(b.description));
+      // Return saved data or empty array
+      return raw ? JSON.parse(raw).sort((a: SavedService, b: SavedService) => a.description.localeCompare(b.description)) : [];
     } catch (e) {
       return [];
     }
@@ -115,12 +80,8 @@ export const catalogService = {
   getProducts: (): SavedProduct[] => {
     try {
       const raw = localStorage.getItem(PRODUCTS_KEY);
-      let products: SavedProduct[] = raw ? JSON.parse(raw) : [];
-      if (products.length === 0) {
-        products = generateMockProducts();
-        localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
-      }
-      return products.sort((a, b) => a.description.localeCompare(b.description));
+      // Return saved data or empty array
+      return raw ? JSON.parse(raw).sort((a: SavedProduct, b: SavedProduct) => a.description.localeCompare(b.description)) : [];
     } catch (e) {
       return [];
     }
