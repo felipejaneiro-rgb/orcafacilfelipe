@@ -4,40 +4,51 @@ import { CompanyProfile } from '../types';
 
 export const companyService = {
   /**
-   * Busca a empresa vinculada ao usuário logado pelo owner_id
+   * Busca a empresa vinculada ao usuário logado pelo owner_id.
+   * Inclui um timeout de segurança para não travar o app se a rede falhar.
    */
   getCompany: async (userId: string): Promise<CompanyProfile | null> => {
-    const { data, error } = await supabase
-      .from('companies')
-      .select('*')
-      .eq('owner_id', userId)
-      .maybeSingle(); 
+    // Promessa de timeout para evitar carregamento infinito
+    const timeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Tempo de resposta do servidor esgotado.")), 5000)
+    );
 
-    if (error) {
-      console.error("Erro ao buscar empresa:", error);
-      throw error;
+    try {
+      const fetchPromise = supabase
+        .from('companies')
+        .select('*')
+        .eq('owner_id', userId)
+        .maybeSingle();
+
+      const { data, error }: any = await Promise.race([fetchPromise, timeout]);
+
+      if (error) {
+        console.error("Erro Supabase (getCompany):", error);
+        return null; // Falha silenciosa para permitir onboarding
+      }
+
+      return data;
+    } catch (e) {
+      console.warn("Company fetch timed out or failed:", e);
+      return null;
     }
-
-    return data;
   },
 
   /**
    * Insere o perfil da empresa no Supabase.
-   * Usamos auth.getUser() no momento do clique para garantir o ID mais recente.
    */
   createCompany: async (userId: string, profile: CompanyProfile): Promise<CompanyProfile> => {
-    // Busca o usuário da sessão atual para garantir que não há discrepância de ID
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      throw new Error("Sessão inválida. Por favor, faça login novamente.");
+      throw new Error("Sessão expirada. Faça login novamente.");
     }
 
     const { data, error } = await supabase
       .from('companies')
       .insert([
         { 
-          owner_id: user.id, // UID real vindo da sessão do Supabase
+          owner_id: user.id,
           razao_social: profile.razao_social,
           nome_fantasia: profile.nome_fantasia,
           cnpj: profile.cnpj,
@@ -53,13 +64,10 @@ export const companyService = {
 
     if (error) {
       console.error("Erro Supabase (createCompany):", error);
-      
-      // Se cair aqui com erro de RLS mesmo após o SQL, o erro 42501 é o código padrão
       if (error.code === '42501') {
-        throw new Error("Erro de permissão (RLS). Certifique-se de executar as políticas de SELECT e INSERT no SQL Editor do Supabase.");
+        throw new Error("Erro de permissão no banco de dados. Verifique as políticas RLS.");
       }
-      
-      throw new Error(error.message || "Erro ao salvar dados da empresa.");
+      throw new Error(error.message || "Não foi possível salvar os dados.");
     }
 
     return data;
