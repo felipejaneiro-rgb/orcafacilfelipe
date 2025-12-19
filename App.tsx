@@ -29,13 +29,31 @@ const QuotePreview = lazy(() => import('./components/QuotePreview'));
 
 type AppView = 'dashboard' | 'editor' | 'history' | 'reports' | 'catalog' | 'clients' | 'onboarding';
 
+// Chave idêntica à definida no lib/supabase.ts
+const AUTH_STORAGE_KEY = 'orcafacil-auth-v2';
+
 const App: React.FC = () => {
-  // 1. Estados de Autenticação (A sugestão de ouro)
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  // --- INICIALIZAÇÃO SÍNCRONA (A CHAVE DO PROBLEMA) ---
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.currentSession?.user) {
+          return authService.mapSupabaseUser(parsed.currentSession.user);
+        }
+      }
+    } catch (e) {
+      console.warn("Erro ao ler sessão local inicial");
+    }
+    return null;
+  });
+
   const [sessionReady, setSessionReady] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
   
-  // 2. Estados de UI
+  // Estados de UI
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
   const [currentStep, setCurrentStep] = useState(0);
   const [quoteData, setQuoteData] = useState<QuoteData>(INITIAL_QUOTE);
@@ -49,7 +67,7 @@ const App: React.FC = () => {
     new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }),
   []);
 
-  // 3. Inicialização de Dados da Empresa
+  // Inicialização de Dados da Empresa
   const initializeCompany = useCallback(async (userId: string) => {
     try {
       const company = await companyService.getCompany(userId);
@@ -57,43 +75,40 @@ const App: React.FC = () => {
         setDefaultCompany(company);
         setCurrentView('dashboard');
       } else {
-        // Se realmente retornou null (sucesso mas sem dados), vai para o onboarding
         setCurrentView('onboarding');
       }
     } catch (err: any) {
-      console.error("Erro ao carregar empresa:", err);
-      // Em caso de erro de rede, não jogamos para o onboarding (cadastro), 
-      // ficamos no dashboard e mostramos o erro se for persistente.
+      console.warn("Empresa não carregada, mantendo no Dashboard:", err);
       setCurrentView('dashboard');
     } finally {
       setIsDataLoaded(true);
+      setLoading(false);
     }
   }, []);
 
-  // 4. Efeito de Monitoramento de Sessão (Padrão Sugerido)
+  // Monitoramento de Sessão (Padrão Robusto)
   useEffect(() => {
     let mounted = true;
 
-    // Busca sessão inicial
+    // Sincroniza com a verdade do Supabase
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
       
       if (session?.user) {
         setCurrentUser(authService.mapSupabaseUser(session.user));
+      } else {
+        setCurrentUser(null);
       }
-      setSessionReady(true); // O "Porteiro" libera a entrada
+      setSessionReady(true);
     });
 
-    // Escuta mudanças (Login/Logout/Token Expired)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
 
       if (session?.user) {
-        const mapped = authService.mapSupabaseUser(session.user);
-        setCurrentUser(mapped);
+        setCurrentUser(authService.mapSupabaseUser(session.user));
       } else {
-        // Só limpa se o evento for explicitamente de saída ou token inválido
-        if (event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+        if (event === 'SIGNED_OUT') {
           setCurrentUser(null);
           setDefaultCompany(null);
           setIsDataLoaded(false);
@@ -109,21 +124,22 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // 5. Efeito de Carga de Perfil (Só roda quando a sessão está confirmada)
+  // Carga de Perfil após sessão pronta
   useEffect(() => {
     if (sessionReady && currentUser && !isDataLoaded) {
       initializeCompany(currentUser.id);
     } else if (sessionReady && !currentUser) {
-      // Se não há usuário, não há dados para carregar
       setIsDataLoaded(true);
+      setLoading(false);
     }
   }, [sessionReady, currentUser, isDataLoaded, initializeCompany]);
 
   const handleLogout = useCallback(async () => {
       if (confirm('Deseja sair da sua conta?')) {
-        setSessionReady(false); // Bloqueia a UI para o logout
+        setLoading(true);
         await authService.logout();
-        window.location.reload(); // Recarga limpa para garantir reset total
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        window.location.reload();
       }
   }, []);
 
@@ -137,9 +153,8 @@ const App: React.FC = () => {
     setQuoteData(p => ({...p, ...d}));
   }, []);
 
-  // 6. Renderizador de Conteúdo (Memoizado para performance)
   const renderViewContent = useMemo(() => {
-    if (!sessionReady || !isDataLoaded) return null;
+    if (!sessionReady && !currentUser) return null;
     
     try {
       switch (currentView) {
@@ -178,42 +193,25 @@ const App: React.FC = () => {
       setAppError(e.message);
       return null;
     }
-  }, [currentView, currentStep, quoteData, currentUser, defaultCompany, navigateToEditor, updateQuoteData, sessionReady, isDataLoaded]);
+  }, [currentView, currentStep, quoteData, currentUser, defaultCompany, navigateToEditor, updateQuoteData, sessionReady]);
 
-  // --- RENDERS DE ESTADO ---
-
-  // 1. Loader de Inicialização (Obrigatório enquanto sessionReady ou isDataLoaded forem falsos)
-  if (!sessionReady || (currentUser && !isDataLoaded)) {
+  // Loader de Inicialização
+  if (loading && !currentUser) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-950">
             <div className="relative flex items-center justify-center">
                 <div className="absolute w-20 h-20 border-4 border-brand-100 dark:border-brand-900/20 rounded-full"></div>
                 <Loader2 className="animate-spin text-brand-600" size={48} />
             </div>
-            <div className="mt-8 text-center">
-                <p className="text-gray-800 dark:text-white font-black tracking-widest uppercase text-xs">Sincronizando</p>
-                <p className="text-gray-400 dark:text-gray-500 text-[10px] mt-1 font-bold">ESTABELECENDO CONEXÃO SEGURA...</p>
+            <div className="mt-8 text-center animate-pulse">
+                <p className="text-gray-800 dark:text-white font-black tracking-widest uppercase text-[10px]">Restaurando Sessão</p>
             </div>
         </div>
       );
   }
 
-  // 2. Erro Crítico
-  if (appError) {
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-            <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md text-center">
-                <AlertCircle size={48} className="text-red-500 mx-auto mb-4" />
-                <h2 className="text-xl font-bold mb-2">Erro de Carregamento</h2>
-                <p className="text-gray-600 mb-6 text-sm">{appError}</p>
-                <button onClick={() => window.location.reload()} className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold">Reiniciar App</button>
-            </div>
-        </div>
-    );
-  }
-
-  // 3. Tela de Login (Só aparece se sessionReady for true e currentUser for null)
-  if (!currentUser) {
+  // Tela de Login
+  if (sessionReady && !currentUser) {
     return (
       <Suspense fallback={null}>
         <AuthView onLoginSuccess={(user) => { setCurrentUser(user); setIsDataLoaded(false); }} />
@@ -221,8 +219,8 @@ const App: React.FC = () => {
     );
   }
 
-  // 4. Tela de Cadastro de Empresa (Onboarding)
-  if (currentView === 'onboarding') {
+  // Tela de Onboarding
+  if (currentView === 'onboarding' && currentUser) {
     return (
       <Suspense fallback={null}>
         <OnboardingView 
@@ -237,7 +235,7 @@ const App: React.FC = () => {
     );
   }
 
-  // 5. Aplicativo Principal
+  // Aplicativo Principal
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950 font-sans overflow-hidden antialiased">
       <Sidebar 
@@ -258,7 +256,7 @@ const App: React.FC = () => {
         <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between px-6 z-30 shrink-0">
            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-gray-500"><Menu /></button>
            <div className="flex items-center gap-3">
-              <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm shadow-green-500/50" />
               <h1 className="font-black text-gray-800 dark:text-white tracking-tighter uppercase text-sm">OrçaFácil Admin</h1>
            </div>
            <div className="hidden md:flex items-center text-xs font-bold text-gray-400">
