@@ -5,7 +5,7 @@ import StepIndicator from './components/StepIndicator';
 import Sidebar from './components/Sidebar'; 
 import { storageService } from './services/storageService';
 import { authService } from './services/authService';
-import { clientService } from './services/clientService';
+import { companyService } from './services/companyService';
 import { useDebounce } from './hooks/useDebounce';
 import { supabase } from './lib/supabase';
 import { 
@@ -20,6 +20,7 @@ import {
 // Lazy Load components
 const AuthView = lazy(() => import('./components/AuthView'));
 const DashboardView = lazy(() => import('./components/DashboardView'));
+const OnboardingView = lazy(() => import('./components/OnboardingView'));
 const HistoryModal = lazy(() => import('./components/HistoryModal'));
 const ReportsView = lazy(() => import('./components/ReportsView'));
 const CatalogView = lazy(() => import('./components/CatalogView'));
@@ -38,7 +39,7 @@ const STORAGE_KEY = 'orcaFacil_data';
 const STORAGE_KEY_PROFILE = 'orcaFacil_profile';
 const STORAGE_KEY_THEME = 'orcaFacil_theme';
 
-type AppView = 'dashboard' | 'editor' | 'history' | 'reports' | 'catalog' | 'clients' | 'public-view';
+type AppView = 'dashboard' | 'editor' | 'history' | 'reports' | 'catalog' | 'clients' | 'public-view' | 'onboarding';
 
 const safePushState = (state: any, url: string) => {
   try {
@@ -59,6 +60,7 @@ const safeReplaceState = (state: any, url: string) => {
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [isCheckingCompany, setIsCheckingCompany] = useState(false);
 
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
   const [currentStep, setCurrentStep] = useState(0);
@@ -78,18 +80,39 @@ const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
+  // LÓGICA DE CHECAGEM DE EMPRESA
+  const checkCompanyRegistration = useCallback(async (userId: string) => {
+    setIsCheckingCompany(true);
+    try {
+      const company = await companyService.getCompany(userId);
+      if (company) {
+        setDefaultCompany(company);
+        localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(company));
+        setCurrentView('dashboard');
+      } else {
+        setCurrentView('onboarding');
+      }
+    } catch (err) {
+      console.error("Erro ao verificar empresa:", err);
+      setCurrentView('dashboard');
+    } finally {
+      setIsCheckingCompany(false);
+    }
+  }, []);
+
   // SUPABASE AUTH LISTENER
   useEffect(() => {
-    // Check initial session
     authService.getCurrentUser().then(user => {
       setCurrentUser(user);
+      if (user) checkCompanyRegistration(user.id);
       setIsAuthChecking(false);
     });
 
-    // Listen for changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        setCurrentUser(authService.mapSupabaseUser(session.user));
+        const user = authService.mapSupabaseUser(session.user);
+        setCurrentUser(user);
+        checkCompanyRegistration(user.id);
       } else {
         setCurrentUser(null);
       }
@@ -97,10 +120,10 @@ const App: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [checkCompanyRegistration]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && currentView !== 'onboarding') {
        safeReplaceState({ view: 'dashboard' }, '');
     }
 
@@ -108,30 +131,12 @@ const App: React.FC = () => {
         if (event.state?.view) {
             setCurrentView(event.state.view);
         } else {
-            setCurrentView('dashboard');
+            setCurrentView(currentUser ? 'dashboard' : 'dashboard');
         }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (currentUser) {
-        const savedProfile = localStorage.getItem(STORAGE_KEY_PROFILE);
-        if (!savedProfile) {
-            const newProfile: CompanyProfile = {
-                name: currentUser.name || '',
-                document: currentUser.document || '',
-                email: currentUser.email || '',
-                phone: currentUser.whatsapp || '',
-                website: currentUser.website || '',
-                address: ''
-            };
-            setDefaultCompany(newProfile);
-            localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(newProfile));
-        }
-    }
   }, [currentUser]);
 
   useEffect(() => {
@@ -186,7 +191,7 @@ const App: React.FC = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    if (isLoaded && currentUser && currentView !== 'public-view') {
+    if (isLoaded && currentUser && currentView !== 'public-view' && currentView !== 'onboarding') {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(debouncedQuoteData));
     }
   }, [debouncedQuoteData, isLoaded, currentUser, currentView]);
@@ -202,20 +207,21 @@ const App: React.FC = () => {
   const handleLogout = useCallback(async () => {
       if (confirm('Deseja sair da sua conta?')) {
           await authService.logout();
-          // State is handled by onAuthStateChange
           setCurrentView('dashboard');
           safePushState({ view: 'dashboard' }, '/');
       }
   }, []);
 
   const handleNavigate = useCallback((view: any) => {
+      if (currentView === 'onboarding') return; 
+
       if (view === 'settings') setShowSettings(true);
       else {
           setCurrentView(view);
           safePushState({ view }, `#${view}`);
       }
       setIsSidebarOpen(false);
-  }, []);
+  }, [currentView]);
 
   const handleLoadQuote = useCallback((quote: QuoteData) => {
     setQuoteData(quote);
@@ -231,7 +237,7 @@ const App: React.FC = () => {
         ...INITIAL_QUOTE,
         id: '', 
         number: nextNumber, 
-        company: defaultCompany.name ? defaultCompany : INITIAL_QUOTE.company
+        company: defaultCompany.razao_social ? defaultCompany : INITIAL_QUOTE.company
     });
     setLastSavedId(null);
     setCurrentStep(0);
@@ -240,14 +246,41 @@ const App: React.FC = () => {
     setIsSidebarOpen(false);
   }, [defaultCompany]);
 
-  if (isAuthChecking) {
-      return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900"><Loader2 className="animate-spin text-brand-600" /></div>;
+  const handleOnboardingComplete = (company: CompanyProfile) => {
+      setDefaultCompany(company);
+      localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(company));
+      setCurrentView('dashboard');
+  };
+
+  if (isAuthChecking || isCheckingCompany) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-950">
+            <Loader2 className="animate-spin text-brand-600 mb-4" size={40} />
+            <p className="text-gray-500 font-medium animate-pulse">
+                {isCheckingCompany ? 'Verificando perfil da empresa...' : 'Carregando...'}
+            </p>
+        </div>
+      );
   }
 
   if (!currentUser) {
       return (
-        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900"><Loader2 className="animate-spin text-brand-600" /></div>}>
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950"><Loader2 className="animate-spin text-brand-600" /></div>}>
             <AuthView onLoginSuccess={() => {}} />
+        </Suspense>
+      );
+  }
+
+  // DEBUG: Para ver a tela de onboarding sem deletar dados, descomente a linha abaixo e comente o if normal
+  // if (true) {
+  if (currentView === 'onboarding') {
+      return (
+        <Suspense fallback={<Loader2 className="animate-spin"/>}>
+            <OnboardingView 
+                userId={currentUser.id} 
+                userEmail={currentUser.email} 
+                onComplete={handleOnboardingComplete} 
+            />
         </Suspense>
       );
   }
@@ -294,7 +327,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 font-sans overflow-hidden transition-colors">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 font-sans overflow-hidden transition-colors">
       <Suspense fallback={null}>
           <CompanySettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} onSave={(p) => setDefaultCompany(p)} initialData={defaultCompany} isDarkMode={isDarkMode} onToggleTheme={toggleTheme}/>
           <ServiceManagerModal isOpen={showServiceManager} onClose={() => setShowServiceManager(false)} onUpdate={() => {}} />
@@ -303,7 +336,7 @@ const App: React.FC = () => {
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} currentView={currentView} onNavigate={handleNavigate} onNewQuote={handleNewQuote} onToggleTheme={toggleTheme} isDarkMode={isDarkMode} onLogout={handleLogout} currentUser={currentUser} hasActiveDraft={true} setShowSettings={setShowSettings}/>
 
       <div className="flex-1 flex flex-col h-full w-full relative">
-        <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 sm:px-6 z-30 shrink-0 shadow-sm">
+        <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 sm:px-6 z-30 shrink-0 shadow-sm">
            <div className="flex items-center">
               <button onClick={() => setIsSidebarOpen(true)} className="md:hidden mr-4 text-gray-500 dark:text-gray-400 p-2 rounded-lg">
                 <Menu size={24} />
@@ -318,7 +351,7 @@ const App: React.FC = () => {
                       setIsSaving(false);
                       setToastMessage("Salvo com sucesso!");
                       setTimeout(() => setToastMessage(null), 3000);
-                  }} className="flex items-center px-4 py-2 text-sm font-medium rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200">
+                  }} className="flex items-center px-4 py-2 text-sm font-medium rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
                     <Save size={18} className="mr-2 text-brand-600" /> {isSaving ? 'Salvando...' : 'Salvar'}
                   </button>
               )}

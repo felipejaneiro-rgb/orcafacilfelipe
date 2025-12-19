@@ -13,7 +13,8 @@ export const generateQuotePDF = (quote: QuoteData) => {
   doc.setProperties({
       title: `Orçamento #${quote.number} - ${quote.client.name}`,
       subject: 'Proposta Comercial',
-      author: quote.company.name || 'OrçaFácil',
+      // Fixed: Property 'name' does not exist on type 'CompanyProfile'. Using nome_fantasia.
+      author: quote.company.nome_fantasia || 'OrçaFácil',
       creator: 'OrçaFácil App'
   });
 
@@ -27,7 +28,8 @@ export const generateQuotePDF = (quote: QuoteData) => {
     ] : [37, 99, 235];
   };
 
-  const brandColorHex = quote.company.brandColor || '#2563eb';
+  // Fixed: Property 'brandColor' does not exist on type 'CompanyProfile'. Using brand_color.
+  const brandColorHex = quote.company.brand_color || '#2563eb';
   const primaryColor = hexToRgb(brandColorHex);
   
   const grayColor = [100, 116, 139]; // Slate-500
@@ -43,10 +45,12 @@ export const generateQuotePDF = (quote: QuoteData) => {
   let yPos = 20;
 
   // 1. Render Logo if exists
-  if (quote.company.logoUrl) {
+  // Fixed: Property 'logoUrl' does not exist on type 'CompanyProfile'. Using logo_url.
+  if (quote.company.logo_url) {
     try {
         // Render logo (max width 40mm, max height 25mm)
-        doc.addImage(quote.company.logoUrl, 14, 15, 35, 0); 
+        // Fixed: Property 'logoUrl' does not exist on type 'CompanyProfile'. Using logo_url.
+        doc.addImage(quote.company.logo_url, 14, 15, 35, 0); 
         yPos = 45; 
     } catch (e) {
         console.error("Error rendering logo", e);
@@ -58,7 +62,8 @@ export const generateQuotePDF = (quote: QuoteData) => {
   doc.setFontSize(22);
   doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
   doc.setFont("helvetica", "bold");
-  doc.text(quote.company.name || "Sua Empresa", 14, yPos);
+  // Fixed: Property 'name' does not exist on type 'CompanyProfile'. Using nome_fantasia.
+  doc.text(quote.company.nome_fantasia || "Sua Empresa", 14, yPos);
 
   yPos += 8; // Move down for details
 
@@ -66,10 +71,11 @@ export const generateQuotePDF = (quote: QuoteData) => {
   doc.setTextColor(grayColor[0], grayColor[1], grayColor[2]);
   doc.setFont("helvetica", "normal");
   
-  if (quote.company.document) { doc.text(`CNPJ/CPF: ${quote.company.document}`, 14, yPos); yPos += 5; }
-  if (quote.company.address) { doc.text(quote.company.address, 14, yPos); yPos += 5; }
-  if (quote.company.email || quote.company.phone) { 
-    doc.text(`${quote.company.email} | ${quote.company.phone}`, 14, yPos); 
+  // Fixed: Property 'document', 'address', 'phone' do not exist on type 'CompanyProfile'. Using cnpj, endereco, telefone.
+  if (quote.company.cnpj) { doc.text(`CNPJ/CPF: ${quote.company.cnpj}`, 14, yPos); yPos += 5; }
+  if (quote.company.endereco) { doc.text(quote.company.endereco, 14, yPos); yPos += 5; }
+  if (quote.company.email || quote.company.telefone) { 
+    doc.text(`${quote.company.email} | ${quote.company.telefone}`, 14, yPos); 
   }
 
   // 3. Quote Info (Right - Fixed Position)
@@ -223,6 +229,7 @@ export const generateQuotePDF = (quote: QuoteData) => {
       }
   } else if (quote.company.showSignature !== false) {
       // 2. MANUAL SIGNATURE LINE (If enabled in settings and not digitally signed)
+      // Fixed: Property 'showSignature' is now available on CompanyProfile via types.ts update.
       const sigY = Math.max(noteY + 10, pageHeight - 50);
       
       doc.setDrawColor(blackColor[0], blackColor[1], blackColor[2]);

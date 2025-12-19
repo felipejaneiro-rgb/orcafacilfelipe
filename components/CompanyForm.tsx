@@ -1,12 +1,12 @@
 
 import React, { useState } from 'react';
 import { QuoteData, CompanyProfile } from '../types';
-import { Building, MapPin, Mail, Phone, Hash, RotateCcw } from 'lucide-react';
+import { Building, MapPin, Mail, Phone, Hash, RotateCcw, Briefcase, User } from 'lucide-react';
 import Input from './ui/Input';
 import Button from './ui/Button';
 import Card from './ui/Card';
-import { validateCNPJ, validateEmail, validatePhone } from '../utils/validation';
-import { maskCNPJ, maskPhone } from '../utils/masks';
+import { validateCNPJ, validateCPF, validateEmail, validatePhone } from '../utils/validation';
+import { maskCNPJ, maskCPF, maskPhone } from '../utils/masks';
 
 interface Props {
   data: QuoteData;
@@ -19,9 +19,11 @@ const CompanyForm: React.FC<Props> = ({ data, updateData, defaultCompany }) => {
 
   const validateField = (name: string, value: string) => {
     let error: string | null = null;
-    if (name === 'document') error = validateCNPJ(value);
+    if (name === 'cnpj') {
+        error = data.company.tipo_empresa === 'pessoa_juridica' ? validateCNPJ(value) : validateCPF(value);
+    }
     if (name === 'email') error = validateEmail(value);
-    if (name === 'phone') error = validatePhone(value);
+    if (name === 'telefone') error = validatePhone(value);
     
     setErrors(prev => ({ ...prev, [name]: error }));
   };
@@ -30,11 +32,11 @@ const CompanyForm: React.FC<Props> = ({ data, updateData, defaultCompany }) => {
     const { name, value } = e.target;
     let maskedValue = value;
 
-    // Apply Masks
-    if (name === 'document') maskedValue = maskCNPJ(value);
-    if (name === 'phone') maskedValue = maskPhone(value);
+    if (name === 'cnpj') {
+        maskedValue = data.company.tipo_empresa === 'pessoa_juridica' ? maskCNPJ(value) : maskCPF(value);
+    }
+    if (name === 'telefone') maskedValue = maskPhone(value);
     
-    // Update data
     updateData({
       company: {
         ...data.company,
@@ -42,7 +44,6 @@ const CompanyForm: React.FC<Props> = ({ data, updateData, defaultCompany }) => {
       }
     });
 
-    // Validate on change
     validateField(name, maskedValue);
   };
 
@@ -53,9 +54,8 @@ const CompanyForm: React.FC<Props> = ({ data, updateData, defaultCompany }) => {
   };
 
   const loadDefaults = () => {
-    if (defaultCompany && confirm('Deseja preencher com os dados salvos da sua empresa?')) {
+    if (defaultCompany && defaultCompany.razao_social && confirm('Deseja preencher com os dados salvos da sua empresa?')) {
       updateData({ company: defaultCompany });
-      // Clear errors
       setErrors({});
     }
   };
@@ -65,7 +65,7 @@ const CompanyForm: React.FC<Props> = ({ data, updateData, defaultCompany }) => {
       <Card 
         title="Dados da Sua Empresa" 
         icon={<Building size={24} />}
-        action={defaultCompany?.name && (
+        action={defaultCompany?.razao_social && (
             <Button 
                 variant="ghost" 
                 onClick={loadDefaults} 
@@ -79,27 +79,34 @@ const CompanyForm: React.FC<Props> = ({ data, updateData, defaultCompany }) => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Input
              containerClassName="col-span-1 lg:col-span-2"
-             label="Nome da Empresa *"
-             name="name"
-             value={data.company.name}
+             label={data.company.tipo_empresa === 'pessoa_juridica' ? "Razão Social *" : "Nome Completo *"}
+             name="razao_social"
+             value={data.company.razao_social}
              onChange={handleChange}
              placeholder="Ex: Soluções Técnicas Ltda"
           />
 
           <Input
-             label="CNPJ ou CPF"
-             name="document"
-             value={data.company.document}
+             label="Nome Fantasia *"
+             name="nome_fantasia"
+             value={data.company.nome_fantasia}
              onChange={handleChange}
-             placeholder="00.000.000/0001-00"
-             icon={<Hash size={18} />}
-             error={errors.document}
-             maxLength={18}
-             helpText="A formatação será aplicada automaticamente ao digitar."
+             placeholder="Ex: Oficina do Pedro"
           />
 
           <Input
-             label="Email"
+             label={data.company.tipo_empresa === 'pessoa_juridica' ? "CNPJ *" : "CPF *"}
+             name="cnpj"
+             value={data.company.cnpj}
+             onChange={handleChange}
+             placeholder="00.000.000/0001-00"
+             icon={<Hash size={18} />}
+             error={errors.cnpj}
+             maxLength={data.company.tipo_empresa === 'pessoa_juridica' ? 18 : 14}
+          />
+
+          <Input
+             label="Email *"
              name="email"
              type="email"
              value={data.company.email}
@@ -110,23 +117,21 @@ const CompanyForm: React.FC<Props> = ({ data, updateData, defaultCompany }) => {
           />
 
           <Input
-             containerClassName="col-span-1 lg:col-span-2"
-             label="Telefone/WhatsApp"
-             name="phone"
-             value={data.company.phone}
+             label="Telefone/WhatsApp *"
+             name="telefone"
+             value={data.company.telefone}
              onChange={handleChange}
              placeholder="(00) 00000-0000"
              icon={<Phone size={18} />}
-             error={errors.phone}
+             error={errors.telefone}
              maxLength={15}
-             helpText="Este número aparecerá no cabeçalho do PDF."
           />
 
           <Input
              containerClassName="col-span-1 lg:col-span-2"
-             label="Endereço Completo"
-             name="address"
-             value={data.company.address}
+             label="Endereço Comercial"
+             name="endereco"
+             value={data.company.endereco || ''}
              onChange={handleChange}
              placeholder="Rua Exemplo, 123 - Centro, Cidade - UF"
              icon={<MapPin size={18} />}

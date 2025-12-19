@@ -1,3 +1,4 @@
+
 import { QuoteData, QuoteStatus, INITIAL_QUOTE } from '../types';
 
 const HISTORY_KEY = 'orcaFacil_history';
@@ -75,7 +76,8 @@ export const storageService = {
             (q.number && q.number.toLowerCase().includes(term)) ||
             (q.client.document && q.client.document.includes(term)) ||
             (q.date && q.date.includes(term)) ||
-            (q.company.name && q.company.name.toLowerCase().includes(term))
+            // Fixed: Property 'name' does not exist on type 'CompanyProfile'. Using nome_fantasia.
+            (q.company.nome_fantasia && q.company.nome_fantasia.toLowerCase().includes(term))
         );
     }
 
