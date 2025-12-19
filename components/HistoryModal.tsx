@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { QuoteData, QuoteStatus } from '../types';
 import { storageService, PaginatedResponse } from '../services/storageService';
@@ -269,8 +270,9 @@ const HistoryModal: React.FC<Props> = ({ onLoadQuote }) => {
                                     <h3 className="text-base font-bold text-gray-900 dark:text-white line-clamp-1">
                                         {quote.client.name}
                                     </h3>
+                                    {/* Fixed: Using nome_fantasia instead of name */}
                                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                        {quote.company.name}
+                                        {quote.company.nome_fantasia}
                                     </p>
                                 </div>
 

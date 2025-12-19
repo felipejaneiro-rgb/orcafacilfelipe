@@ -2,8 +2,10 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
 
+// Added size property to fix errors in components using Button with a size prop
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline';
+  size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
   icon?: React.ReactNode;
 }
@@ -11,6 +13,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 const Button: React.FC<ButtonProps> = ({ 
   children, 
   variant = 'primary', 
+  size = 'md',
   isLoading, 
   icon, 
   className = '', 
@@ -18,7 +21,8 @@ const Button: React.FC<ButtonProps> = ({
   ...props 
 }) => {
   
-  const baseStyles = "flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-[0.98]";
+  // Removed fixed padding from baseStyles to allow size-based control
+  const baseStyles = "flex items-center justify-center rounded-lg font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-[0.98]";
   
   const variants = {
     primary: "bg-brand-600 hover:bg-brand-700 text-white shadow-sm shadow-brand-500/30 focus:ring-brand-500 border border-transparent",
@@ -28,9 +32,16 @@ const Button: React.FC<ButtonProps> = ({
     ghost: "bg-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white border border-transparent"
   };
 
+  // Added size variants for padding and text size
+  const sizes = {
+    sm: "px-2.5 py-1.5 text-xs",
+    md: "px-4 py-2",
+    lg: "px-6 py-3 text-lg"
+  };
+
   return (
     <button 
-      className={`${baseStyles} ${variants[variant]} ${className}`}
+      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
       disabled={isLoading || disabled}
       {...props}
     >

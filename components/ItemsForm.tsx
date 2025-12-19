@@ -345,10 +345,11 @@ const ItemsForm: React.FC<Props> = ({ data, updateData }) => {
                         </div>
                     </td>
                     <td className="px-2 py-3 text-center">
+                        {/* Removed title property from icons to fix TypeScript error */}
                         {item.type === 'product' ? (
-                            <ShoppingCart size={14} className="text-orange-500 inline" title="Produto" />
+                            <ShoppingCart size={14} className="text-orange-500 inline" />
                         ) : (
-                            <Hammer size={14} className="text-blue-500 inline" title="Serviço" />
+                            <Hammer size={14} className="text-blue-500 inline" />
                         )}
                     </td>
                     <td className="px-3 py-3">

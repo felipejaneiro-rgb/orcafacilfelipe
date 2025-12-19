@@ -117,8 +117,9 @@ const PublicQuoteView: React.FC<Props> = ({ data, onStatusChange, onBack }) => {
             <div className="bg-brand-600 h-24 relative">
                 <div className="absolute -bottom-10 left-6">
                     <div className="w-20 h-20 bg-white dark:bg-gray-700 rounded-xl shadow-md border-4 border-white dark:border-gray-800 flex items-center justify-center overflow-hidden">
-                         {data.company.logoUrl ? (
-                             <img src={data.company.logoUrl} className="w-full h-full object-contain" />
+                         {/* Fixed: Using logo_url instead of logoUrl */}
+                         {data.company.logo_url ? (
+                             <img src={data.company.logo_url} className="w-full h-full object-contain" />
                          ) : (
                              <ShieldCheck size={40} className="text-brand-600" />
                          )}
@@ -126,14 +127,16 @@ const PublicQuoteView: React.FC<Props> = ({ data, onStatusChange, onBack }) => {
                 </div>
             </div>
             <div className="pt-12 pb-6 px-6">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{data.company.name}</h1>
+                {/* Fixed: Using nome_fantasia instead of name */}
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{data.company.nome_fantasia}</h1>
                 <div className="flex flex-col gap-1 mt-2 text-sm text-gray-600 dark:text-gray-400">
                     <div className="flex items-center gap-2">
                         <Mail size={14} /> {data.company.email}
                     </div>
-                    {data.company.phone && (
+                    {/* Fixed: Using telefone instead of phone */}
+                    {data.company.telefone && (
                         <div className="flex items-center gap-2">
-                            <Phone size={14} /> {data.company.phone}
+                            <Phone size={14} /> {data.company.telefone}
                         </div>
                     )}
                 </div>

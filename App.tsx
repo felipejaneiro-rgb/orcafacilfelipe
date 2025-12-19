@@ -62,7 +62,13 @@ const App: React.FC = () => {
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [isCheckingCompany, setIsCheckingCompany] = useState(false);
 
-  const [currentView, setCurrentView] = useState<AppView>('dashboard');
+  // Inicializa a view checando a URL para evitar flash de login
+  const [currentView, setCurrentView] = useState<AppView>(() => {
+    const hash = window.location.hash;
+    if (hash.startsWith('#public-view') || hash.startsWith('#v/')) return 'public-view';
+    return 'dashboard';
+  });
+
   const [currentStep, setCurrentStep] = useState(0);
   const [quoteData, setQuoteData] = useState<QuoteData>(INITIAL_QUOTE);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -70,8 +76,6 @@ const App: React.FC = () => {
   const debouncedQuoteData = useDebounce(quoteData, 1000);
   
   const [showSettings, setShowSettings] = useState(false);
-  const [showServiceManager, setShowServiceManager] = useState(false);
-  
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [defaultCompany, setDefaultCompany] = useState<CompanyProfile>(INITIAL_QUOTE.company);
   
@@ -79,30 +83,28 @@ const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // LÓGICA DE CHECAGEM DE EMPRESA (O Passo a Passo)
+  // LÓGICA DE CHECAGEM DE EMPRESA
   const checkCompanyRegistration = useCallback(async (userId: string) => {
+    // Se já estamos em uma view pública, não forçamos onboarding nem dashboard agora
+    if (currentView === 'public-view') return;
+
     setIsCheckingCompany(true);
     try {
-      // 1. Consulta o banco de dados companies
       const company = await companyService.getCompany(userId);
-      
-      // 2. Decide o destino baseado na existência do registro
       if (company) {
         setDefaultCompany(company);
         localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(company));
         setCurrentView('dashboard');
       } else {
-        // Se não houver empresa, força o Onboarding
         setCurrentView('onboarding');
       }
     } catch (err) {
       console.error("Erro ao verificar empresa:", err);
-      // Em caso de erro técnico, enviamos para onboarding para garantir integridade
       setCurrentView('onboarding');
     } finally {
       setIsCheckingCompany(false);
     }
-  }, []);
+  }, [currentView]);
 
   // SUPABASE AUTH LISTENER
   useEffect(() => {
@@ -119,13 +121,16 @@ const App: React.FC = () => {
         checkCompanyRegistration(user.id);
       } else {
         setCurrentUser(null);
-        setCurrentView('dashboard'); // Volta para o login
+        // Se deslogar, só voltamos para o dashboard (login) se não for view pública
+        if (currentView !== 'public-view') {
+            setCurrentView('dashboard');
+        }
       }
       setIsAuthChecking(false);
     });
 
     return () => subscription.unsubscribe();
-  }, [checkCompanyRegistration]);
+  }, [checkCompanyRegistration, currentView]);
 
   useEffect(() => {
     // Bloqueia manipulação manual de URL para sair do onboarding
@@ -134,7 +139,6 @@ const App: React.FC = () => {
     }
 
     const handlePopState = (event: PopStateEvent) => {
-        // Bloqueio de navegação 'back' se estiver no onboarding
         if (currentView === 'onboarding') {
             safeReplaceState({ view: 'onboarding' }, '');
             return;
@@ -142,8 +146,6 @@ const App: React.FC = () => {
 
         if (event.state?.view) {
             setCurrentView(event.state.view);
-        } else {
-            setCurrentView(currentUser ? 'dashboard' : 'dashboard');
         }
     };
 
@@ -202,7 +204,6 @@ const App: React.FC = () => {
   }, []);
 
   const handleNavigate = useCallback((view: any) => {
-      // TRAVA DE SEGURANÇA: Se estiver em onboarding, não navega.
       if (currentView === 'onboarding') return; 
 
       if (view === 'settings') setShowSettings(true);
@@ -241,7 +242,23 @@ const App: React.FC = () => {
       setCurrentView('dashboard');
   };
 
-  // FULL SCREEN LOADING STATE (Evita flash de UI)
+  // 1. ROTA PÚBLICA (Renderiza SEMPRE se solicitada, independente de login)
+  if (currentView === 'public-view') {
+      return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950"><Loader2 className="animate-spin text-brand-600" /></div>}>
+            <PublicQuoteView 
+                data={quoteData} 
+                onStatusChange={(status) => setQuoteData(prev => ({...prev, status}))} 
+                onBack={() => {
+                    if (currentUser) setCurrentView('editor');
+                    else setCurrentView('dashboard');
+                }}
+            />
+        </Suspense>
+      );
+  }
+
+  // 2. LOADINGS DE SISTEMA
   if (isAuthChecking || isCheckingCompany) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-950">
@@ -256,7 +273,7 @@ const App: React.FC = () => {
       );
   }
 
-  // LOGIN VIEW
+  // 3. TELA DE LOGIN (Só aparece se não for view pública e não estiver logado)
   if (!currentUser) {
       return (
         <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950"><Loader2 className="animate-spin text-brand-600" /></div>}>
@@ -265,7 +282,7 @@ const App: React.FC = () => {
       );
   }
 
-  // ONBOARDING VIEW (Bloqueia todo o resto do App)
+  // 4. ONBOARDING (Travado após login se não houver empresa)
   if (currentView === 'onboarding') {
       return (
         <Suspense fallback={<Loader2 className="animate-spin"/>}>
@@ -278,8 +295,8 @@ const App: React.FC = () => {
       );
   }
 
+  // 5. APP PRINCIPAL (DASHBOARD / EDITOR / ETC)
   const renderContent = () => {
-      if (currentView === 'public-view') return <Suspense fallback={<Loader2 className="animate-spin"/>}><PublicQuoteView data={quoteData} onStatusChange={() => {}} onBack={() => handleNavigate('editor')}/></Suspense>;
       if (currentView === 'dashboard') return <Suspense fallback={<Loader2 className="animate-spin"/>}><DashboardView user={currentUser} onNavigate={handleNavigate} onLoadQuote={handleLoadQuote} onNewQuote={handleNewQuote}/></Suspense>;
       if (currentView === 'history') return <Suspense fallback={<Loader2 className="animate-spin"/>}><HistoryModal isOpen={true} onClose={() => {}} onLoadQuote={handleLoadQuote} /></Suspense>;
       if (currentView === 'reports') return <Suspense fallback={<Loader2 className="animate-spin"/>}><ReportsView /></Suspense>;

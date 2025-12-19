@@ -137,11 +137,13 @@ const QuotePreview: React.FC<Props> = ({ data, onEdit, onApprove, onSimulateClie
                 {/* Header */}
                 <div className="flex flex-col md:flex-row justify-between items-start mb-12 gap-6">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900 mb-2">{data.company.name || 'Sua Empresa'}</h1>
+                        {/* Fixed: Using nome_fantasia instead of name */}
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">{data.company.nome_fantasia || 'Sua Empresa'}</h1>
                         <div className="text-sm text-gray-500 space-y-1">
-                            {data.company.document && <p>CNPJ/CPF: {data.company.document}</p>}
-                            {data.company.address && <p>{data.company.address}</p>}
-                            <p>{data.company.email} {data.company.phone && `| ${data.company.phone}`}</p>
+                            {/* Fixed: Using cnpj, endereco, telefone instead of document, address, phone */}
+                            {data.company.cnpj && <p>CNPJ/CPF: {data.company.cnpj}</p>}
+                            {data.company.endereco && <p>{data.company.endereco}</p>}
+                            <p>{data.company.email} {data.company.telefone && `| ${data.company.telefone}`}</p>
                         </div>
                     </div>
                     <div className="md:text-right">
