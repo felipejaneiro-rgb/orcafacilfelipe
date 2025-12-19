@@ -20,14 +20,14 @@ const supabaseUrl = getEnvVar('VITE_SUPABASE_URL') || PROVIDED_URL;
 const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY') || PROVIDED_ANON_KEY;
 
 /**
- * CONFIGURAÇÃO DE SESSÃO: persistSession: false
- * Isso impede que o Supabase salve o token no LocalStorage.
- * O usuário SERÁ DESLOGADO ao fechar a aba ou dar F5, conforme sua regra de negócio.
+ * CONFIGURAÇÃO DE SESSÃO RÍGIDA
+ * persistSession: false + storage: null garante que o token morra no F5 ou fechar aba.
  */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: false,
     autoRefreshToken: false,
-    detectSessionInUrl: true // Necessário para o retorno do Google OAuth funcionar
+    detectSessionInUrl: true,
+    storage: null as any // Impede que o SDK escreva/leia do LocalStorage
   }
 });

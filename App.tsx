@@ -27,14 +27,11 @@ const ClientForm = lazy(() => import('./components/ClientForm'));
 const ItemsForm = lazy(() => import('./components/ItemsForm'));
 const QuotePreview = lazy(() => import('./components/QuotePreview'));
 
-const STORAGE_KEY_PROFILE = 'orcaFacil_profile';
-
 type AppView = 'dashboard' | 'editor' | 'history' | 'reports' | 'catalog' | 'clients' | 'onboarding';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isAuthChecking, setIsAuthChecking] = useState(false);
-  const [isCheckingCompany, setIsCheckingCompany] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [appError, setAppError] = useState<string | null>(null);
 
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
@@ -45,93 +42,81 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  const loadCompanyAndStart = useCallback(async (user: User) => {
-    setIsCheckingCompany(true);
+  // Função disparada manualmente após Login/Registro
+  const handleAuthSuccess = async (user: User) => {
+    setIsProcessing(true);
     setAppError(null);
+    setCurrentUser(user);
+    
     try {
       const company = await companyService.getCompany(user.id);
       if (company) {
         setDefaultCompany(company);
-        localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(company));
         setCurrentView('dashboard');
       } else {
+        // Se não tem empresa, vai para o Onboarding (Cadastro de Perfil)
         setCurrentView('onboarding');
       }
     } catch (err: any) {
-      console.error("Erro Crítico no Carregamento:", err);
-      // Se não achar a empresa, manda pro onboarding em vez de dar tela branca
+      console.error("Erro ao verificar empresa:", err);
       setCurrentView('onboarding');
     } finally {
-      setIsCheckingCompany(false);
+      setIsProcessing(false);
     }
-  }, []);
+  };
 
+  // Monitora OAuth (Google) especificamente, mas ignora sessões antigas
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
+      if (event === 'SIGNED_IN' && session?.user && !currentUser) {
         const user = authService.mapSupabaseUser(session.user);
-        setCurrentUser(user);
-        loadCompanyAndStart(user);
-      } else if (event === 'SIGNED_OUT') {
-        setCurrentUser(null);
-        setDefaultCompany(null);
-        setCurrentView('dashboard');
+        handleAuthSuccess(user);
       }
     });
-
     return () => subscription.unsubscribe();
-  }, [loadCompanyAndStart]);
-
-  const handleLoginSuccess = (user?: User) => {
-      if (user) {
-          setCurrentUser(user);
-          loadCompanyAndStart(user);
-      }
-  };
+  }, [currentUser]);
 
   const handleLogout = async () => {
-      if (confirm('Deseja sair da sua conta?')) {
-          await authService.logout();
-          window.location.reload();
-      }
+      await authService.logout();
+      setCurrentUser(null);
+      setDefaultCompany(null);
+      window.location.reload();
   };
 
-  // Escudo contra Tela Branca
   if (appError) {
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-4">
-            <div className="bg-white dark:bg-gray-900 p-8 rounded-3xl shadow-2xl max-w-md text-center border border-red-100 dark:border-red-900/20">
+            <div className="bg-white dark:bg-gray-900 p-8 rounded-3xl shadow-2xl max-w-md text-center border border-red-100">
                 <AlertCircle size={48} className="text-red-500 mx-auto mb-4" />
-                <h2 className="text-xl font-bold mb-2 dark:text-white">Ops! Ocorreu um erro</h2>
+                <h2 className="text-xl font-bold mb-2 dark:text-white">Erro no Aplicativo</h2>
                 <p className="text-gray-600 dark:text-gray-400 mb-6 text-sm">{appError}</p>
-                <button 
-                  onClick={() => window.location.reload()} 
-                  className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-brand-700 transition-colors"
-                >
-                  <RefreshCw size={18} /> Recarregar Aplicativo
+                <button onClick={() => window.location.reload()} className="w-full bg-brand-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-brand-700">
+                  <RefreshCw size={18} /> Recarregar
                 </button>
             </div>
         </div>
     );
   }
 
-  if (isAuthChecking || isCheckingCompany) {
+  if (isProcessing) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-950">
             <Loader2 className="animate-spin text-brand-600 mb-4" size={48} />
-            <p className="text-gray-500 dark:text-gray-400 font-medium">Preparando seu ambiente...</p>
+            <p className="text-gray-500 dark:text-gray-400 font-medium tracking-tight">Verificando conta...</p>
         </div>
       );
   }
 
+  // Se não tem usuário logado, mostra Tela de Auth (Login/Registro)
   if (!currentUser) {
     return (
       <Suspense fallback={null}>
-        <AuthView onLoginSuccess={handleLoginSuccess} />
+        <AuthView onLoginSuccess={handleAuthSuccess} />
       </Suspense>
     );
   }
 
+  // Se logado mas sem empresa cadastrada
   if (currentView === 'onboarding') {
     return (
       <Suspense fallback={null}>
@@ -182,7 +167,7 @@ const App: React.FC = () => {
           return null;
       }
     } catch (e: any) {
-      setAppError("Falha na renderização do componente: " + e.message);
+      setAppError(e.message);
       return null;
     }
   };
